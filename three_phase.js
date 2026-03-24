@@ -60,11 +60,9 @@ const decryptData = (base64Data) => {
 };
 
 
-
-async function getUser(username)
-{
+async function getUser(username) {
     const [results, fields] = await connection.query(`SELECT * FROM logins WHERE username = "${username}"`);
-    if(results.length === 1)
+    if (results.length === 1)
         return results[0];
 
     return false;
@@ -78,12 +76,13 @@ function verifyPassword(inputPassword, storedSalt, storedHash, actionOnSuccess, 
         const inputHash = derivedKey.toString('hex');
 
         // Compare the newly generated hash with the one stored in the database
-        if(storedHash === inputHash) {
+        if (storedHash === inputHash) {
             actionOnSuccess();
         } else
             actionOnFail();
     });
 }
+
 const urlSafeToBase64 = (urlSafeStr) => {
     // Add padding back for standard Base64 if needed
     let standardB64 = urlSafeStr.replace(/-/g, '+').replace(/_/g, '/');
@@ -93,38 +92,8 @@ const urlSafeToBase64 = (urlSafeStr) => {
     return standardB64;
 };
 
-app.get("/Accounts", async (req, res) => {
-    const{u,p} = req.query;
-    let encryptedUserName = urlSafeToBase64(u)
-    let encryptedPassword = urlSafeToBase64(p)
-    if(!encryptedUserName || !encryptedPassword)
-    {
-        return res.status(400).json("Username and password are required")
-    }
-
-    //make decryped username and password
-    let decryptedUserName = decryptData(encryptedUserName);
-    let decryptedPassword = decryptData(encryptedPassword);
-
-    const [results, fields] = await connection.query(`SELECT * FROM logins WHERE username = "${decryptedUserName}"`);
-    if(results.length === 0)
-    {
-        return false;
-    }
-    else
-    {
-        if(results[0].access === 1)
-        {
-            verifyPassword(results[0], encryptedUserName, encryptedPassword);
-            return connection.query(`SELECT * FROM Accounts`);
-        }
-    }
-})
-
-async function getAccounts(user)
-{
-    if(user.access === 1)
-    {
+async function getAccounts(user) {
+    if (user.access === 1) {
         const [results, fields] = await connection.query('SELECT * FROM accounts');
         return results;
     }
@@ -132,100 +101,165 @@ async function getAccounts(user)
     return results;
 }
 
-async function getTransactions(accountID)
-{
-        const [results, fields] = await connection.query(`SELECT * FROM transactions WHERE transactions.toAcc = ${accountID} OR transactions.fromAcc = ${accountID}`);
-        return results;
+async function getTransactions(accountID) {
+    const [results, fields] = await connection.query(`SELECT * FROM transactions WHERE transactions.toAcc = ${accountID} OR transactions.fromAcc = ${accountID}`);
+    return results;
 }
 
-async function maxLoginID()
-{
+async function maxLoginID() {
     const [results, fields] = await connection.query(`SELECT max(id) FROM logins`);
     return results[0]["max(id)"];
 }
-async function maxAccountID()
-{
+
+async function maxAccountID() {
     const [results, fields] = await connection.query(`SELECT max(accountID) FROM accounts`);
     return results[0]["max(accountID)"];
 }
-async function maxTransactionID()
-{
+
+async function maxTransactionID() {
     const [results, fields] = await connection.query(`SELECT max(transactionID) FROM transactions`);
     return results[0]["max(transactionID)"];
 }
 
 async function createUser(username, password) {
     const salt = crypto.randomBytes(16).toString('hex');
-    let id = await maxLoginID()+1;
+    let id = await maxLoginID() + 1;
     crypto.scrypt(password, salt, 64, (err, derivedKey) => {
         if (err) throw err;
 
         const hash = derivedKey.toString('hex');
 
         connection.query(`INSERT INTO logins VALUES("${username}", ${id}, "${hash}", "${salt}", 0)`);
-    } )
+    })
 
 }
 
-async function createAccount(type, ownerID)
-{
-    let id = await maxAccountID()+1;
+async function createAccount(type, ownerID) {
+    let id = await maxAccountID() + 1;
     await connection.query(`INSERT INTO accounts VALUES(${id}, 0, "${type}", ${ownerID})`)
 }
 
-async function verifyAccess(user, accountID)
-{
-    if(user.access === 1)
+async function verifyAccess(user, accountID) {
+    if (user.access === 1)
         return true;
 
-    else
-    {
-        const[results, fields] = await connection.query(`SELECT DISTINCT ownerID FROM accounts WHERE ${accountID} = accountID`)
-        if(results.length === 0)
+    else {
+        const [results, fields] = await connection.query(`SELECT DISTINCT ownerID FROM accounts WHERE ${accountID} = accountID`)
+        if (results.length === 0)
             return false;
 
-        if(results[0].ownerID === user.id)
+        if (results[0].ownerID === user.id)
             return true;
     }
     return false;
 }
 
-async function verifyBalance(accountID, amount)
-{
-    const[results, fields] = await connection.query(`SELECT DISTINCT * FROM accounts WHERE accountID = ${accountID}`);
-    if(results[0].balance >= amount)
+async function verifyBalance(accountID, amount) {
+    const [results, fields] = await connection.query(`SELECT DISTINCT * FROM accounts WHERE accountID = ${accountID}`);
+    if (results[0].balance >= amount)
         return true;
 
     return false;
 }
 
-async function transfer(user, accountID1, accountID2, amount)
-{
-    if(await verifyAccess(user, accountID1) && await verifyAccess(user, accountID2)){
-        if(await verifyBalance(accountID2, amount)){
-            const[results, fields] = connection.query(`SELECT balance FROM accounts WHERE accountID = ${accountID1}`);
+async function transfer(user, toAccountID, fromAccountID, amount) {
+    if (await verifyAccess(user, toAccountID) && await verifyAccess(user, fromAccountID)) {
+        if (await verifyBalance(fromAccountID, amount)) {
+            const [results, fields] = await connection.query(`SELECT balance FROM accounts WHERE accountID = ${toAccountID}`);
             let newBalance = results[0].balance + amount;
-            const[results1, fields1] = await connection.query(`SELECT balance FROM accounts WHERE accountID = ${accountID2}`);
-            let newBalance1 = results1[0].balance + amount;
-            await connection.query(`UPDATE accounts SET balance = ${newBalance} WHERE accountID = ${accountID1}`);
-            await connection.query(`UPDATE accounts SET balance = ${newBalance1} WHERE accountID = ${accountID2}`);
+            const [results1, fields1] = await connection.query(`SELECT balance FROM accounts WHERE accountID = ${fromAccountID}`);
+            let newBalance1 = results1[0].balance - amount;
+            await connection.query(`UPDATE accounts SET balance = ${newBalance} WHERE accountID = ${toAccountID}`);
+            await connection.query(`UPDATE accounts SET balance = ${newBalance1} WHERE accountID = ${fromAccountID}`);
             let id = await maxTransactionID() + 1;
-            await connection.query(`INSERT INTO transactions VALUES(${id}, ${amount}, ${accountID1}, ${accountID2})`);
-        }
-    }
+            await connection.query(`INSERT INTO transactions VALUES(${id}, ${amount}, ${fromAccountID}, ${toAccountID})`);
+            return 200;
+        } else return 400;
+    } else return 403;
 }
 
-app.get("/transactions", (req, res) => {})
+async function deposit(user, accountID, amount) {
+    if (user.access === 1) {
+        const [results, fields] = await connection.query(`SELECT balance FROM accounts WHERE accountID = ${accountID}`);
+        let newBalance = results[0].balance + amount;
+        await connection.query(`UPDATE accounts SET balance = ${newBalance} WHERE accountID = ${accountID}`);
+        let id = await maxTransactionID() + 1;
+        await connection.query(`INSERT INTO transactions VALUES(${id}, ${amount}, null, ${accountID})`);
+        return 200;
+    } else return 403;
+}
 
-app.post("/login", (req, res) => {})
+async function withdraw(user, accountID, amount) {
+    if (user.access === 1) {
+        if (await verifyBalance(accountID, amount)) {
+            const [results, fields] = await connection.query(`SELECT balance FROM accounts WHERE accountID = ${accountID}`);
+            let newBalance = results[0].balance - amount;
+            await connection.query(`UPDATE accounts SET balance = ${newBalance} WHERE accountID = ${accountID}`);
+            let id = await maxTransactionID() + 1;
+            await connection.query(`INSERT INTO transactions VALUES(${id}, ${amount}, ${accountID}, null)`);
+            return 200;
+        } else return 400;
+    } else return 403;
+}
 
-app.post("/account", (req, res) => {})
+app.get("/Accounts", async (req, res) => {
+    const {u, p} = req.query;
+    let encryptedUserName = urlSafeToBase64(u)
+    let encryptedPassword = urlSafeToBase64(p)
+    if (!encryptedUserName || !encryptedPassword) {
+        return res.status(400).json("Username and password are required")
+    }
 
-app.post('/deposit', (req, res) => {})
+    //make decryped username and password
+    let decryptedUserName = decryptData(encryptedUserName);
+    let decryptedPassword = decryptData(encryptedPassword);
+    getUser(decryptedUserName).then((user) => {
+        verifyPassword(decryptedPassword, user.salt, user.hash, () => getAccounts(user).then((results) => {
+            return res.status(200).json(results);
+        }), () => {
+            return res.status(403).json("Unauthorized")
+        });
+    })
+})
 
-app.post('/withdraw', (req, res) => {})
+app.get("/transactions", (req, res) => {
+    const {u, p, accountID} = req.query;
+    let encryptedUserName = urlSafeToBase64(u)
+    let encryptedPassword = urlSafeToBase64(p)
+    if (!encryptedUserName || !encryptedPassword) {
+        return res.status(400).json("Username and password are required")
+    }
 
-app.post('/transfer', (req, res) => {})
+    //make decryped username and password
+    let decryptedUserName = decryptData(encryptedUserName);
+    let decryptedPassword = decryptData(encryptedPassword);
+
+    getUser(decryptedUserName).then((user) => {
+        verifyPassword(decryptedUserName, user.salt, user.hash, () => {
+            getTransactions(accountID).then((results) => {
+                return res.status(200).json(results);
+            })
+        }, () => {
+            return res.status(403).json("Unauthorized")
+        });
+    });
+})
+
+app.post("/login", (req, res) => {
+})
+
+app.post("/account", (req, res) => {
+})
+
+app.post('/deposit', (req, res) => {
+})
+
+app.post('/withdraw', (req, res) => {
+})
+
+app.post('/transfer', (req, res) => {
+})
+
 //testing getAccounts
 // getUser("luksh").then((result) => {
 //     getAccounts(result).then(accounts => {
@@ -265,7 +299,29 @@ app.post('/transfer', (req, res) => {})
 // })
 
 //testing verifyBalance
-//DOESNT WORK TEST AGAIN
-verifyBalance(9, 50).then((results) => {
-    console.log(results);
-});
+// //DOESNT WORK TEST AGAIN
+// verifyBalance(9, 50).then((results) => {
+//     console.log(results);
+// });
+
+//testing transfer
+// getUser("luksh").then((user) =>
+// {
+//     transfer(user, 0, 1, 25).then((results) => {
+//         console.log(results);
+//     });
+// })
+
+//testing deposit
+// getUser("bigadmin").then((user) => {
+//     deposit(user, 10, 25).then((results) => {
+//         console.log(results);
+//     })
+// })
+
+//testing withdraw
+// getUser("bigadmin").then((user) => {
+//     withdraw(user, 10, 30).then((results) => {
+//         console.log(results);
+//     });
+// })
