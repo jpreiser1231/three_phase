@@ -217,7 +217,7 @@ app.get("/Accounts", async (req, res) => {
         verifyPassword(decryptedPassword, user.salt, user.hash, () => getAccounts(user).then((results) => {
             return res.status(200).json(results);
         }), () => {
-            return res.status(403).json("Unauthorized")
+            return res.status(403).json("Username or password are incorrect")
         });
     })
 })
@@ -240,24 +240,100 @@ app.get("/transactions", (req, res) => {
                 return res.status(200).json(results);
             })
         }, () => {
-            return res.status(403).json("Unauthorized")
+            return res.status(403).json("Username or password are incorrect")
         });
     });
 })
 
 app.post("/login", (req, res) => {
+    const{username, password} = req.body;
+    let decryptedUsername = decryptData(username);
+    let decryptedPassword = decryptData(password);
+    getUser(decryptedUsername).then((user) => {
+        if(user)
+            return res.status(400).json("Username already exists");
+        
+        else
+        {
+            createUser(decryptedUsername, password).then((result) => {
+                return res.status(201).json(result);
+            })    
+        }
+    })
 })
 
-app.post("/account", (req, res) => {
+app.post("/accounts", (req, res) => {
+    const {username, password, accountType} = req.body;
+    let decryptedUsername = decryptData(username);
+    let decryptedPassword = decryptData(password);
+    getUser(decryptedUsername).then((user) => {
+        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            createAccount(accountType, user.ownerID).then((result) => {
+                return res.status(201).json(result);
+            })
+        }, () => {return res.status(403).json("Username or password are incorrect")})
+    })
 })
 
 app.post('/deposit', (req, res) => {
+    const{username, password, accountID, amount} = req.body;
+    let decryptedUsername = decryptData(username);
+    let decryptedPassword = decryptData(password);
+    if(!username || !password || !accountID  || !amount) {
+        return res.status(400).json("Username, password, accountID, and amount are required");
+    }
+    getUser(decryptedUsername).then((user) => {
+        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            deposit(user, accountID, amount).then((result) => {
+                if(result === 403)
+                    return res.status(403).json("Access denied: admin only")
+                else return res.status(200).json("Deposit successful")
+            })
+        }, () => {return res.status(403).json("Username or password are incorrect")})
+    })
 })
 
 app.post('/withdraw', (req, res) => {
+    const{username, password, accountID, amount} = req.body;
+    let decryptedUsername = decryptData(username);
+    let decryptedPassword = decryptData(password);
+    if(!username || !password || !accountID  || !amount) {
+        return res.status(400).json("Username, password, accountID, and amount are required");
+    }
+    getUser(decryptedUsername).then((user) => {
+        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            withdraw(user, accountID, amount).then((result) => {
+                if(result === 403)
+                    return res.status(403).json("Access denied: admin only");
+                
+                else if (result === 400)
+                    return res.status(400).json("Insufficient funds to withdraw"); 
+                
+                else return res.status(200).json("Withdraw successful")
+            })
+        }, () => {return res.status(403).json("Username or password are incorrect")})
+    })
 })
 
 app.post('/transfer', (req, res) => {
+    const{username, password, toAccount, fromAccount, amount} = req.body;
+    let decryptedUsername = decryptData(username);
+    let decryptedPassword = decryptData(password);
+    if(!username || !password || !accountID  || !amount) {
+        return res.status(400).json("Username, password, toAccountID, fromAccountID, and amount are required");
+    }
+    getUser(decryptedUsername).then((user) => {
+        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            transfer(user, toAccountID, fromAccountID, amount).then((result) => {
+                if(result === 403)
+                    return res.status(403).json("Access denied: access to both accounts is required");
+                else if (result === 400)
+                    res.status(400).json("Insufficient funds");
+                
+                else return res.status(200).json("Transfer successful");
+            })
+        }, () => {return res.status(403).json("Username or password are incorrect")})
+    })
 })
 
 //testing getAccounts
