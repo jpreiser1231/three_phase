@@ -1,0 +1,24 @@
+#login-container
+{
+  margin-top: 20px;
+  text-align: center;
+  justify-content: left;
+  flex-direction: column;
+  display:flex;
+  align-items: center;
+
+}
+
+#welcome_title
+{
+  margin-top: 100px;
+  text-align: center;
+  font-size: 100px;
+}
+#username_input {
+  margin-bottom: 40px;
+}
+.sign-in-text
+{
+  
+}
