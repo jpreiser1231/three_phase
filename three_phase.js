@@ -214,12 +214,19 @@ app.get("/Accounts", async (req, res) => {
     let decryptedUserName = decryptData(encryptedUserName);
     let decryptedPassword = decryptData(encryptedPassword);
     getUser(decryptedUserName).then((user) => {
-        verifyPassword(decryptedPassword, user.salt, user.hash, () => getAccounts(user).then((results) => {
-            return res.status(200).json(results);
-        }), () => {
-            return res.status(403).json("Username or password are incorrect")
-        });
+        if(user) {
+            verifyPassword(decryptedPassword, user.salt, user.hash, () => getAccounts(user).then((results) => {
+                return res.status(200).json(results);
+            }), () => {
+                return res.status(403).json("Username or password are incorrect")
+            });
+        }
+        else
+        {
+            return res.status(404).json("User does not exist")
+        }
     })
+
 })
 
 app.get("/transactions", (req, res) => {
@@ -235,14 +242,23 @@ app.get("/transactions", (req, res) => {
     let decryptedPassword = decryptData(encryptedPassword);
 
     getUser(decryptedUserName).then((user) => {
-        verifyPassword(decryptedUserName, user.salt, user.hash, () => {
-            getTransactions(accountID).then((results) => {
-                return res.status(200).json(results);
+        if (user) {
+            verifyAccess(user, accountID).then((r) => {
+                if (r) {
+                    verifyPassword(decryptedUserName, user.salt, user.hash, () => {
+                        getTransactions(accountID).then((results) => {
+                            return res.status(200).json(results);
+                        })
+                    }, () => {
+                        return res.status(403).json("Username or password are incorrect")
+                    });
+                }
             })
-        }, () => {
-            return res.status(403).json("Username or password are incorrect")
-        });
-    });
+        }
+        else {
+            return res.status(403).json("User does not exist");
+        }
+    })
 })
 
 app.post("/login", (req, res) => {
@@ -267,12 +283,19 @@ app.post("/accounts", (req, res) => {
     let decryptedUsername = decryptData(username);
     let decryptedPassword = decryptData(password);
     getUser(decryptedUsername).then((user) => {
-        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-            createAccount(accountType, user.ownerID).then((result) => {
-                return res.status(201).json(result);
+        if(user) {
+            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+                createAccount(accountType, user.ownerID).then((result) => {
+                    return res.status(201).json(result);
+                })
+            }, () => {
+                return res.status(403).json("Username or password are incorrect")
             })
-        }, () => {return res.status(403).json("Username or password are incorrect")})
-    })
+        }
+    else
+        {
+            return res.status(404).json("User does not exist");
+        }})
 })
 
 app.post('/deposit', (req, res) => {
@@ -283,13 +306,21 @@ app.post('/deposit', (req, res) => {
         return res.status(400).json("Username, password, accountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
-        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-            deposit(user, accountID, amount).then((result) => {
-                if(result === 403)
-                    return res.status(403).json("Access denied: admin only")
-                else return res.status(200).json("Deposit successful")
+        if(user) {
+            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+                deposit(user, accountID, amount).then((result) => {
+                    if (result === 403)
+                        return res.status(403).json("Access denied: admin only")
+                    else return res.status(200).json("Deposit successful")
+                })
+            }, () => {
+                return res.status(403).json("Username or password are incorrect")
             })
-        }, () => {return res.status(403).json("Username or password are incorrect")})
+        }
+        else
+        {
+            return res.status(404).json("User does not exist");
+        }
     })
 })
 
@@ -301,17 +332,25 @@ app.post('/withdraw', (req, res) => {
         return res.status(400).json("Username, password, accountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
-        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-            withdraw(user, accountID, amount).then((result) => {
-                if(result === 403)
-                    return res.status(403).json("Access denied: admin only");
-                
-                else if (result === 400)
-                    return res.status(400).json("Insufficient funds to withdraw"); 
-                
-                else return res.status(200).json("Withdraw successful")
+        if(user) {
+
+            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+                withdraw(user, accountID, amount).then((result) => {
+                    if (result === 403)
+                        return res.status(403).json("Access denied: admin only");
+
+                    else if (result === 400)
+                        return res.status(400).json("Insufficient funds to withdraw");
+
+                    else return res.status(200).json("Withdraw successful")
+                })
+            }, () => {
+                return res.status(403).json("Username or password are incorrect")
             })
-        }, () => {return res.status(403).json("Username or password are incorrect")})
+        }
+    else {
+        return res.status(404).json("User does not exist");
+        }
     })
 })
 
@@ -323,16 +362,24 @@ app.post('/transfer', (req, res) => {
         return res.status(400).json("Username, password, toAccountID, fromAccountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
-        verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-            transfer(user, toAccountID, fromAccountID, amount).then((result) => {
-                if(result === 403)
-                    return res.status(403).json("Access denied: access to both accounts is required");
-                else if (result === 400)
-                    res.status(400).json("Insufficient funds");
-                
-                else return res.status(200).json("Transfer successful");
+        if(user) {
+            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+                transfer(user, toAccountID, fromAccountID, amount).then((result) => {
+                    if (result === 403)
+                        return res.status(403).json("Access denied: access to both accounts is required");
+                    else if (result === 400)
+                        res.status(400).json("Insufficient funds");
+
+                    else return res.status(200).json("Transfer successful");
+                })
+            }, () => {
+                return res.status(403).json("Username or password are incorrect")
             })
-        }, () => {return res.status(403).json("Username or password are incorrect")})
+        }
+    else
+        {
+            return res.status(404).json("User does not exist");
+        }
     })
 })
 

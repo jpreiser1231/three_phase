@@ -99,7 +99,7 @@ export function App() {
         setDisplay("Creating user...");
         const encryptedUsername = await encrypt(username);
         const encryptedPassword = await encrypt(password);
-        fetch(`http://localhost:3000/public_key`, {
+        fetch(`http://localhost:3000/login`, {
             method: 'POST',
             headers: ({
                 'content-type': 'application/json',
@@ -146,6 +146,7 @@ export function App() {
                         }}>Sign In
                         </button>
                     </div>
+                    {display}
                 </div>
             </>
             }
