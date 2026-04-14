@@ -215,7 +215,7 @@ app.get("/Accounts", async (req, res) => {
     let decryptedPassword = decryptData(encryptedPassword);
     getUser(decryptedUserName).then((user) => {
         if(user) {
-            verifyPassword(decryptedPassword, user.salt, user.hash, () => getAccounts(user).then((results) => {
+            verifyPassword(decryptedPassword, user.salt, user.hashed, () => getAccounts(user).then((results) => {
                 return res.status(200).json(results);
             }), () => {
                 return res.status(403).json("Username or password are incorrect")
@@ -245,7 +245,7 @@ app.get("/transactions", (req, res) => {
         if (user) {
             verifyAccess(user, accountID).then((r) => {
                 if (r) {
-                    verifyPassword(decryptedUserName, user.salt, user.hash, () => {
+                    verifyPassword(decryptedPassword, user.salt, user.hashed, () => {
                         getTransactions(accountID).then((results) => {
                             return res.status(200).json(results);
                         })
@@ -253,25 +253,29 @@ app.get("/transactions", (req, res) => {
                         return res.status(403).json("Username or password are incorrect")
                     });
                 }
+                else
+                {
+                    return res.status(401).json("No access");
+                }
             })
         }
         else {
-            return res.status(403).json("User does not exist");
+            return res.status(404).json("User does not exist");
         }
     })
 })
 
 app.post("/login", (req, res) => {
-    const{username, password} = req.body;
-    let decryptedUsername = decryptData(username);
-    let decryptedPassword = decryptData(password);
+    const{encryptedUsername, encryptedPassword} = req.body;
+    let decryptedUsername = decryptData(encryptedUsername);
+    let decryptedPassword = decryptData(encryptedPassword);
     getUser(decryptedUsername).then((user) => {
         if(user)
             return res.status(400).json("Username already exists");
         
         else
         {
-            createUser(decryptedUsername, password).then((result) => {
+            createUser(decryptedUsername, decryptedPassword).then((result) => {
                 return res.status(201).json(result);
             })    
         }
@@ -279,13 +283,13 @@ app.post("/login", (req, res) => {
 })
 
 app.post("/accounts", (req, res) => {
-    const {username, password, accountType} = req.body;
-    let decryptedUsername = decryptData(username);
-    let decryptedPassword = decryptData(password);
+    const {encryptedUsername, encryptedPassword, accountType} = req.body;
+    let decryptedUsername = decryptData(encryptedUsername);
+    let decryptedPassword = decryptData(encryptedPassword);
     getUser(decryptedUsername).then((user) => {
         if(user) {
-            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-                createAccount(accountType, user.ownerID).then((result) => {
+            verifyPassword(decryptedPassword, user.salt, user.hashed, () => {
+                createAccount(accountType, user.id).then((result) => {
                     return res.status(201).json(result);
                 })
             }, () => {
@@ -299,15 +303,15 @@ app.post("/accounts", (req, res) => {
 })
 
 app.post('/deposit', (req, res) => {
-    const{username, password, accountID, amount} = req.body;
-    let decryptedUsername = decryptData(username);
-    let decryptedPassword = decryptData(password);
-    if(!username || !password || !accountID  || !amount) {
+    const{encryptedUsername, encryptedPassword, accountID, amount} = req.body;
+    let decryptedUsername = decryptData(encryptedUsername);
+    let decryptedPassword = decryptData(encryptedPassword);
+    if(!decryptedUsername || !decryptedPassword || !accountID  || !amount) {
         return res.status(400).json("Username, password, accountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
         if(user) {
-            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            verifyPassword(decryptedPassword, user.salt, user.hashed, () => {
                 deposit(user, accountID, amount).then((result) => {
                     if (result === 403)
                         return res.status(403).json("Access denied: admin only")
@@ -325,16 +329,16 @@ app.post('/deposit', (req, res) => {
 })
 
 app.post('/withdraw', (req, res) => {
-    const{username, password, accountID, amount} = req.body;
-    let decryptedUsername = decryptData(username);
-    let decryptedPassword = decryptData(password);
-    if(!username || !password || !accountID  || !amount) {
+    const{encryptedUsername, encryptedPassword, accountID, amount} = req.body;
+    let decryptedUsername = decryptData(encryptedUsername);
+    let decryptedPassword = decryptData(encryptedPassword);
+    if(!decryptedUsername || !decryptedPassword || !accountID  || !amount) {
         return res.status(400).json("Username, password, accountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
         if(user) {
 
-            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
+            verifyPassword(decryptedPassword, user.salt, user.hashed, () => {
                 withdraw(user, accountID, amount).then((result) => {
                     if (result === 403)
                         return res.status(403).json("Access denied: admin only");
@@ -355,16 +359,16 @@ app.post('/withdraw', (req, res) => {
 })
 
 app.post('/transfer', (req, res) => {
-    const{username, password, toAccount, fromAccount, amount} = req.body;
-    let decryptedUsername = decryptData(username);
-    let decryptedPassword = decryptData(password);
-    if(!username || !password || !accountID  || !amount) {
+    const{encryptedUsername, encryptedPassword, toAccount, fromAccount, amount} = req.body;
+    let decryptedUsername = decryptData(encryptedUsername);
+    let decryptedPassword = decryptData(encryptedPassword);
+    if(!decryptedUsername || !decryptedPassword || !toAccount  || !fromAccount ||!amount) {
         return res.status(400).json("Username, password, toAccountID, fromAccountID, and amount are required");
     }
     getUser(decryptedUsername).then((user) => {
         if(user) {
-            verifyPassword(decryptedPassword, user.salt, user.hash, () => {
-                transfer(user, toAccountID, fromAccountID, amount).then((result) => {
+            verifyPassword(decryptedPassword, user.salt, user.hashed, () => {
+                transfer(user, toAccount, fromAccount, amount).then((result) => {
                     if (result === 403)
                         return res.status(403).json("Access denied: access to both accounts is required");
                     else if (result === 400)

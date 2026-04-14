@@ -20,13 +20,13 @@ export function App() {
         ownerID: number
     }[]>();
     const [accountID, setAccountID] = useState<number>();
-    const [type, setType] = useState<string>();
     const [transactions, setTransactions] = useState<{
         transactionID: number,
         amount: number,
         toAcc: number,
         fromAcc: number
     }[]>();
+    const [accountType, setAccountType] = useState<string>("");
 
     const refreshKey = () => {
         fetch(`http://localhost:3000/public_key`)
@@ -70,18 +70,9 @@ export function App() {
     };
 
     async function signIn(username: string, password: string) {
-        const encryptedUsername = base64ToUrlSafe(username);
-        const encryptedPassword = base64ToUrlSafe(password);
-        fetch(`http://localhost:3000/public_key`, {
-            method: 'GET',
-            headers: ({
-                'content-type': 'application/json',
-            }),
-            body: JSON.stringify({
-                encryptedUsername,
-                encryptedPassword
-            }),
-        }).then((res) => {
+        const encryptedUsername = base64ToUrlSafe(await encrypt(username) as string);
+        const encryptedPassword = base64ToUrlSafe(await encrypt(password) as string);
+        fetch(`http://localhost:3000/Accounts?u=${encryptedUsername}&p=${encryptedPassword}`).then((res) => {
             if (!res.ok) {
                 res.json().then(message => {
                     setDisplay(message);
@@ -122,6 +113,34 @@ export function App() {
         })
     }
 
+    async function createAccount(username: string, password: string, accountType: string) {
+        const encryptedUsername = await encrypt(username);
+        const encryptedPassword = await encrypt(password);
+        fetch(`http://localhost:3000/accounts`, {
+            method: 'POST',
+            headers: ({
+                'content-type': 'application/json',
+            }),
+            body: JSON.stringify({
+                encryptedUsername,
+                encryptedPassword,
+                accountType
+            }),
+        }).then((res) => {
+            if (!res.ok) {
+                res.json().then(message => {
+                    setDisplay(message);
+                })
+            } else {
+                res.json().then((data) => {
+                    setAccounts(data)
+                })
+                setPage("dashboard")
+            }
+        })
+
+    }
+
 
     return (
         <>
@@ -152,14 +171,19 @@ export function App() {
             }
 
             {page === "dashboard" && <>
-                { accounts &&
+
+                {accounts &&
                     accounts.map((item, index) =>
-                        <div key = {index}>
-                            <div id = "account-list">{item}</div>
+                        <div key={index}>
+                            <div id="account-list">Account ID: {item.accountID} Account Type: {item.accountType} Balance: {item.balance}</div>
                         </div>
-                )
+                    )
                 }
-                </>
+                <input type="text" id="account_type_input" value={accountType} onChange={e => {
+                    setAccountType(e.target.value)
+                }} placeholder={"Enter account type"}/>
+                <button onClick={() => {createAccount(usernameInput, passwordInput, accountType)}}>Create Account</button>
+            </>
             }
         </>
     )
